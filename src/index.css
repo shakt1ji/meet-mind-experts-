@@ -1,0 +1,137 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-serif: "Playfair Display", Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --color-obsidian: #0b0b10;
+  --color-lavender: #a78bfa;
+}
+
+@layer base {
+  html,
+  body {
+    background-color: #0b0b10;
+    color: #f4f4f7;
+    font-family: var(--font-sans);
+    letter-spacing: 0.008em;
+  }
+
+  /* Subtle dark scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0b0b10;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(167, 139, 250, 0.4);
+  }
+}
+
+.canvas-dotted-grid {
+  background-color: #0b0b10;
+  background-image: radial-gradient(rgba(167, 139, 250, 0.11) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes quoteFlash {
+  0% {
+    background-color: rgba(167, 139, 250, 0.22);
+    box-shadow: inset 0 0 0 1px rgba(167, 139, 250, 0.55);
+  }
+  70% {
+    background-color: rgba(167, 139, 250, 0.12);
+    box-shadow: inset 0 0 0 1px rgba(167, 139, 250, 0.35);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: inset 0 0 0 1px transparent;
+  }
+}
+
+.quote-highlight-flash {
+  animation: quoteFlash 2.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes diffNodeGlow {
+  0% {
+    box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.9), 0 0 28px rgba(167, 139, 250, 0.55);
+    transform: scale(1.03);
+  }
+  65% {
+    box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.55), 0 0 18px rgba(167, 139, 250, 0.3);
+    transform: scale(1);
+  }
+  100% {
+    box-shadow: 0 0 0 1px rgba(167, 139, 250, 0.25), 0 0 0 rgba(167, 139, 250, 0);
+    transform: scale(1);
+  }
+}
+
+.diff-node-glow {
+  animation: diffNodeGlow 2.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes nodeAppear {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.node-appear {
+  animation: nodeAppear 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.react-flow__controls {
+  background: #111118 !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 10px !important;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45) !important;
+}
+
+.react-flow__controls-button {
+  background: #111118 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  fill: #d4d4d8 !important;
+  color: #d4d4d8 !important;
+}
+
+.react-flow__controls-button:hover {
+  background: rgba(167, 139, 250, 0.16) !important;
+  fill: #e9d5ff !important;
+}
+
+.react-flow__minimap {
+  background: #0e0e15 !important;
+  border: 1px solid rgba(255, 255, 255, 0.09) !important;
+  border-radius: 10px !important;
+}
+
+.react-flow__attribution {
+  display: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse,
+  .quote-highlight-flash,
+  .diff-node-glow,
+  .node-appear {
+    animation: none !important;
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "MeetMind",
+  "description": "Meetings that execute themselves. AI-powered Hinglish & English meeting intelligence with ambiguity resolution, automated workflows, tickets, and promise ledger.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
