@@ -118,6 +118,7 @@ import {
   type RawLiveAudioAnalysisPayload,
   buildAutoTicketsAndPromisesFromMeeting,
   buildMeetingFromLiveAnalysis,
+  buildMockCustomConnectorActions,
   buildPlannedActionsFromFunctionCalls,
   buildWorkflowFromExecutionPlan,
   formatMmSs,
@@ -179,6 +180,7 @@ function mapToolNameToNodeAndBadge(toolName: PlannedToolName): {
     case "notify_slack":
       return { nodeTypes: ["slack-nudge"], planTool: "Slack" };
     case "call_n8n":
+    case "custom_connector":
       return { nodeTypes: ["slack-nudge"], planTool: "n8n" };
   }
 }
@@ -2077,9 +2079,13 @@ export default function App() {
   };
 
   const planToolsForMeeting = async (targetMeeting: Meeting): Promise<PlannedToolAction[]> => {
+    const customConnectors = settingsRef.current.customConnectors || [];
     try {
       if (mockModeRef.current) {
-        return buildMockPlannedToolActions(targetMeeting.id, targetMeeting.title);
+        return [
+          ...buildMockPlannedToolActions(targetMeeting.id, targetMeeting.title),
+          ...buildMockCustomConnectorActions(targetMeeting, customConnectors),
+        ];
       }
       const resp = await fetch("/api/gemini/plan-tools", {
         method: "POST",
@@ -2091,6 +2097,7 @@ export default function App() {
           executionPlan: targetMeeting.executionPlan || [],
           roster: stateRef.current.people,
           modelName: settingsRef.current.geminiModel,
+          customConnectors,
           items: targetMeeting.extractedItems.map((it) => ({
             kind: it.kind,
             liveCategory: it.liveCategory,
@@ -2109,12 +2116,19 @@ export default function App() {
         toolCalls?: Array<{ id?: string; name: string; args: Record<string, unknown> }>;
       };
       if (resp.ok && Array.isArray(data.toolCalls)) {
-        return buildPlannedActionsFromFunctionCalls(targetMeeting.id, data.toolCalls);
+        return buildPlannedActionsFromFunctionCalls(
+          targetMeeting.id,
+          data.toolCalls,
+          customConnectors
+        );
       }
     } catch {
       // Fallback cleanly to editable mock tool actions
     }
-    return buildMockPlannedToolActions(targetMeeting.id, targetMeeting.title);
+    return [
+      ...buildMockPlannedToolActions(targetMeeting.id, targetMeeting.title),
+      ...buildMockCustomConnectorActions(targetMeeting, customConnectors),
+    ];
   };
 
   // Unified Background Pipeline for both Global Recorder Orb and Live Record Page
@@ -2778,11 +2792,15 @@ export default function App() {
 
   const handlePlanToolsForSelectedMeeting = async (targetMeeting: Meeting) => {
     setIsPlanningMeetingTools(true);
+    const customConnectors = settings.customConnectors || [];
     try {
       let actions: PlannedToolAction[];
       if (mockMode) {
         await new Promise((r) => window.setTimeout(r, 220));
-        actions = buildMockPlannedToolActions(targetMeeting.id, targetMeeting.title);
+        actions = [
+          ...buildMockPlannedToolActions(targetMeeting.id, targetMeeting.title),
+          ...buildMockCustomConnectorActions(targetMeeting, customConnectors),
+        ];
       } else {
         const resp = await fetch("/api/gemini/plan-tools", {
           method: "POST",
@@ -2794,6 +2812,7 @@ export default function App() {
             executionPlan: targetMeeting.executionPlan || [],
             roster: state.people,
             modelName: settings.geminiModel,
+            customConnectors,
             items: targetMeeting.extractedItems.map((it) => ({
               kind: it.kind,
               liveCategory: it.liveCategory,
@@ -2815,7 +2834,11 @@ export default function App() {
         if (!resp.ok || !Array.isArray(data.toolCalls)) {
           throw new Error(data.error || "Could not plan tool actions.");
         }
-        actions = buildPlannedActionsFromFunctionCalls(targetMeeting.id, data.toolCalls);
+        actions = buildPlannedActionsFromFunctionCalls(
+          targetMeeting.id,
+          data.toolCalls,
+          customConnectors
+        );
       }
       handleUpdateLiveMeeting({ ...targetMeeting, plannedActions: actions });
     } catch (err) {
@@ -2827,10 +2850,10 @@ export default function App() {
       );
       handleUpdateLiveMeeting({
         ...targetMeeting,
-        plannedActions: buildMockPlannedToolActions(
-          targetMeeting.id,
-          targetMeeting.title
-        ),
+        plannedActions: [
+          ...buildMockPlannedToolActions(targetMeeting.id, targetMeeting.title),
+          ...buildMockCustomConnectorActions(targetMeeting, customConnectors),
+        ],
       });
     } finally {
       setIsPlanningMeetingTools(false);

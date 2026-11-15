@@ -1032,7 +1032,16 @@ Strict Instructions:
   // Live Meeting Mode: Gemini Function Calling Tool Planner (Human-in-the-loop)
   app.post("/api/gemini/plan-tools", async (req, res) => {
     try {
-      const { meetingId, meetingTitle, summary, items, executionPlan, roster, modelName } = req.body as {
+      const {
+        meetingId,
+        meetingTitle,
+        summary,
+        items,
+        executionPlan,
+        roster,
+        modelName,
+        customConnectors,
+      } = req.body as {
         meetingId?: string;
         meetingTitle?: string;
         summary?: string;
@@ -1054,6 +1063,20 @@ Strict Instructions:
         }>;
         roster?: RosterMemberInput[];
         modelName?: string;
+        customConnectors?: Array<{
+          id?: string;
+          name?: string;
+          toolName?: string;
+          description?: string;
+          endpointUrl?: string;
+          enabled?: boolean;
+          params?: Array<{
+            name?: string;
+            type?: string;
+            description?: string;
+            required?: boolean;
+          }>;
+        }>;
       };
 
       if (!Array.isArray(items) || items.length === 0) {
@@ -1149,6 +1172,66 @@ Strict Instructions:
         },
       ];
 
+      const builtInNames = new Set(declarations.map((d) => d.name));
+      const activeCustomConnectors = (Array.isArray(customConnectors) ? customConnectors : []).filter(
+        (c) =>
+          c &&
+          c.enabled !== false &&
+          typeof c.toolName === "string" &&
+          c.toolName.trim().length > 0 &&
+          typeof c.endpointUrl === "string" &&
+          c.endpointUrl.trim().length > 0 &&
+          !builtInNames.has(c.toolName.trim())
+      );
+
+      for (const conn of activeCustomConnectors) {
+        const cleanToolName = String(conn.toolName)
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9_]/g, "_")
+          .slice(0, 60);
+        if (!cleanToolName || builtInNames.has(cleanToolName)) continue;
+        builtInNames.add(cleanToolName);
+
+        const properties: Record<string, { type: Type; description?: string }> = {};
+        const required: string[] = [];
+
+        for (const p of conn.params || []) {
+          const paramName = (p.name || "").trim().replace(/[^a-zA-Z0-9_]/g, "_");
+          if (!paramName) continue;
+          properties[paramName] = {
+            type:
+              p.type === "number"
+                ? Type.NUMBER
+                : p.type === "boolean"
+                ? Type.BOOLEAN
+                : Type.STRING,
+            description: p.description || paramName,
+          };
+          if (p.required) required.push(paramName);
+        }
+
+        if (Object.keys(properties).length === 0) {
+          properties.summary = {
+            type: Type.STRING,
+            description: "Concise meeting action payload to send to this connector.",
+          };
+          required.push("summary");
+        }
+
+        declarations.push({
+          name: cleanToolName,
+          description: `[User Connector: ${conn.name || cleanToolName}] ${
+            conn.description || "Trigger this connected integration with extracted meeting details."
+          }`,
+          parameters: {
+            type: Type.OBJECT,
+            properties,
+            required,
+          },
+        });
+      }
+
       const itemsSummary = items
         .map(
           (it, i) =>
@@ -1170,6 +1253,13 @@ Strict Instructions:
         ) ||
         (executionPlan || []).some((p) => p.tool.toLowerCase() === "slides");
 
+      const customConnectorsHint =
+        activeCustomConnectors.length > 0
+          ? `\n- User-Connected Custom Tools (${activeCustomConnectors
+              .map((c) => `${c.toolName}: ${c.description}`)
+              .join("; ")}): call these custom tools whenever relevant to the meeting items.`
+          : "";
+
       const prompt = `You are MeetMind's execution planner. Based on this meeting's extracted items and execution plan, emit the exact function calls needed to prepare all actions for human approval.
 
 Meeting ID: ${meetingId || "mtg_live"}
@@ -1189,7 +1279,7 @@ Call the appropriate tools:
 - create_calendar_event if a follow-up meeting or review was discussed
 - notify_slack once for the team summary
 - call_n8n once with meetingId "${meetingId || "mtg_live"}" so downstream workflows can sync
-- ${hasPresentationRequest ? "MUST call create_presentation (6-8 slides) because a presentation/deck was requested." : "call create_presentation (6-8 slides) if a stakeholder summary deck would be helpful."}`;
+- ${hasPresentationRequest ? "MUST call create_presentation (6-8 slides) because a presentation/deck was requested." : "call create_presentation (6-8 slides) if a stakeholder summary deck would be helpful."}${customConnectorsHint}`;
 
       const response = await ai.models.generateContent({
         model,
@@ -1484,6 +1574,137 @@ Keep under 160 words.`,
       res.json({ ok: true, status: upstream.status, responseText: responseText.slice(0, 200) });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to deliver webhook.";
+      res.status(500).json({ error: message });
+    }
+  });
+
+  // Universal Server-Side Custom Connector Executor (n8n-style REST / API / Webhook bridge)
+  app.post("/api/integrations/custom-tool", async (req, res) => {
+    try {
+      const {
+        endpointUrl,
+        method,
+        authHeaderName,
+        authHeaderValue,
+        extraHeadersJson,
+        payloadTemplate,
+        args,
+        meetingContext,
+      } = req.body as {
+        endpointUrl?: string;
+        method?: string;
+        authHeaderName?: string;
+        authHeaderValue?: string;
+        extraHeadersJson?: string;
+        payloadTemplate?: string;
+        args?: Record<string, unknown>;
+        meetingContext?: Record<string, unknown>;
+      };
+
+      const trimmedUrl = (endpointUrl || "").trim();
+      if (!trimmedUrl) {
+        res.status(400).json({ error: "Custom connector Endpoint URL is required." });
+        return;
+      }
+
+      let parsedUrl: URL;
+      try {
+        parsedUrl = new URL(trimmedUrl);
+      } catch {
+        res.status(400).json({ error: "Invalid Endpoint URL format." });
+        return;
+      }
+
+      const isAllowedProtocol =
+        parsedUrl.protocol === "https:" ||
+        (parsedUrl.protocol === "http:" &&
+          (parsedUrl.hostname === "localhost" || parsedUrl.hostname === "127.0.0.1"));
+
+      if (!isAllowedProtocol) {
+        res.status(400).json({
+          error: "Endpoint URL must use HTTPS (or http://localhost for local testing).",
+        });
+        return;
+      }
+
+      const httpMethod =
+        method === "GET" || method === "PUT" || method === "PATCH" ? method : "POST";
+
+      const headers: Record<string, string> = {};
+      if (httpMethod !== "GET") {
+        headers["Content-Type"] = "application/json";
+      }
+
+      if (extraHeadersJson && extraHeadersJson.trim()) {
+        try {
+          const parsedExtra = JSON.parse(extraHeadersJson) as Record<string, unknown>;
+          if (parsedExtra && typeof parsedExtra === "object") {
+            for (const [k, v] of Object.entries(parsedExtra)) {
+              if (k.trim() && v !== undefined && v !== null) {
+                headers[k.trim()] = String(v);
+              }
+            }
+          }
+        } catch {
+          res.status(400).json({ error: "Extra headers JSON is malformed." });
+          return;
+        }
+      }
+
+      if (authHeaderName?.trim() && authHeaderValue?.trim()) {
+        headers[authHeaderName.trim()] = authHeaderValue.trim();
+      }
+
+      const templateVars: Record<string, unknown> = {
+        ...(meetingContext || {}),
+        ...(args || {}),
+      };
+
+      let bodyString: string | undefined;
+      if (httpMethod !== "GET") {
+        if (payloadTemplate && payloadTemplate.trim()) {
+          bodyString = payloadTemplate.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key) => {
+            const val = templateVars[key];
+            if (val === undefined || val === null) return "";
+            if (typeof val === "string") {
+              // Strip enclosing quotes from JSON.stringify so template quotes stay valid
+              return JSON.stringify(val).slice(1, -1);
+            }
+            return String(val);
+          });
+        } else {
+          bodyString = JSON.stringify({
+            ...(meetingContext || {}),
+            args: args || {},
+            ...(args || {}),
+          });
+        }
+      }
+
+      const upstream = await fetch(parsedUrl.toString(), {
+        method: httpMethod,
+        headers,
+        ...(bodyString !== undefined ? { body: bodyString } : {}),
+      });
+
+      const responseText = await upstream.text().catch(() => "");
+      if (!upstream.ok) {
+        res.status(502).json({
+          error: `Connector returned HTTP ${upstream.status}: ${
+            responseText.slice(0, 180) || "Upstream error"
+          }`,
+        });
+        return;
+      }
+
+      res.json({
+        ok: true,
+        status: upstream.status,
+        responsePreview: responseText.slice(0, 300) || `HTTP ${upstream.status} OK`,
+      });
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to execute custom connector.";
       res.status(500).json({ error: message });
     }
   });

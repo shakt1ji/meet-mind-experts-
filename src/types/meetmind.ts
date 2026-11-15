@@ -121,7 +121,30 @@ export type PlannedToolName =
   | "create_calendar_event"
   | "notify_slack"
   | "call_n8n"
-  | "create_presentation";
+  | "create_presentation"
+  | "custom_connector";
+
+export interface CustomConnectorParam {
+  name: string;
+  type: "string" | "number" | "boolean";
+  description: string;
+  required?: boolean;
+}
+
+export interface CustomConnector {
+  id: string;
+  name: string;
+  toolName: string;
+  description: string;
+  method: "POST" | "PUT" | "PATCH" | "GET";
+  endpointUrl: string;
+  authHeaderName?: string;
+  authHeaderValue?: string;
+  extraHeadersJson?: string;
+  payloadTemplate?: string;
+  params: CustomConnectorParam[];
+  enabled: boolean;
+}
 
 export type PlannedToolStatus =
   | "pending"
@@ -172,6 +195,10 @@ export interface PlannedToolAction {
   slideDeck?: SlideDeckData;
   attachPptx?: boolean;
   attachmentName?: string;
+  customConnectorId?: string;
+  customConnectorName?: string;
+  customToolName?: string;
+  responsePreview?: string;
   error?: string;
   executedAt?: string;
 }
@@ -361,6 +388,7 @@ export interface AppSettings {
   geminiModel: string;
   testMode: boolean;
   testEmail: string;
+  customConnectors: CustomConnector[];
 }
 
 export interface MeetMindState {

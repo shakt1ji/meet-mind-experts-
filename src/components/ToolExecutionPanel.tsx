@@ -12,6 +12,7 @@ import {
   Mail,
   MessageSquare,
   Paperclip,
+  PlugZap,
   Presentation,
   RotateCcw,
   Send,
@@ -96,6 +97,8 @@ function getToolMeta(name: PlannedToolName) {
       return { label: "n8n", icon: Webhook, color: "text-amber-300" };
     case "create_presentation":
       return { label: "Slides", icon: Presentation, color: "text-indigo-300" };
+    case "custom_connector":
+      return { label: "Connector", icon: PlugZap, color: "text-cyan-300" };
   }
 }
 
@@ -157,6 +160,9 @@ export function ToolExecutionPanel({
   const activeSlidesUrl = slideAction?.googlePresentationUrl;
   const activePptxName = slideAction?.pptxFileName;
   const draftEmailAction = plannedActions.find((a) => a.toolName === "draft_email");
+  const activeConnectorsCount = (settings.customConnectors || []).filter(
+    (c) => c.enabled && c.endpointUrl.trim().length > 0
+  ).length;
 
   // Resolve effective email recipient honoring Test Mode safety guard
   const safeTestEmail =
@@ -481,6 +487,7 @@ export function ToolExecutionPanel({
   };
 
   const executeSingleAction = async (action: PlannedToolAction): Promise<boolean> => {
+    const actionLabel = action.customConnectorName || getToolMeta(action.toolName).label;
     if (idempotencyLedger[action.idempotencyKey]) {
       onRecordIdempotency(idempotencyLedger[action.idempotencyKey], true);
       patchAction(action.id, {
@@ -489,7 +496,7 @@ export function ToolExecutionPanel({
         executedAt: "Skipped duplicate (already succeeded)",
       });
       appendLiveLog(
-        getToolMeta(action.toolName).label,
+        actionLabel,
         "skipped",
         `Duplicate blocked: ${action.title}`
       );
@@ -500,7 +507,7 @@ export function ToolExecutionPanel({
     setRunningActionId(action.id);
     patchAction(action.id, { error: undefined });
     onSyncWorkflowNode?.({ toolName: action.toolName, status: "running" });
-    appendLiveLog(getToolMeta(action.toolName).label, "running", `Permitted: ${action.title}`);
+    appendLiveLog(actionLabel, "running", `Permitted: ${action.title}`);
 
     try {
       const nowTime = new Date().toLocaleTimeString([], {
@@ -780,6 +787,114 @@ export function ToolExecutionPanel({
         return true;
       }
 
+      if (action.toolName === "custom_connector") {
+        const conn = (settings.customConnectors || []).find(
+          (c) =>
+            (action.customConnectorId && c.id === action.customConnectorId) ||
+            (action.customToolName && c.toolName === action.customToolName)
+        );
+        if (!conn) {
+          throw new Error(
+            `Custom connector "${action.customConnectorName || action.customToolName || "tool"}" was not found in Settings.`
+          );
+        }
+        if (!conn.enabled) {
+          throw new Error(`Custom connector "${conn.name}" is currently paused in Settings.`);
+        }
+        if (!conn.endpointUrl.trim()) {
+          throw new Error(`Custom connector "${conn.name}" has no endpoint URL configured.`);
+        }
+
+        if (mockMode) {
+          const mockPreview = `Simulated ${conn.method} ${conn.endpointUrl} with args: ${JSON.stringify(
+            action.args
+          )}`;
+          onRecordIdempotency(
+            {
+              key: action.idempotencyKey,
+              nodeId: action.id,
+              meetingId: meeting.id,
+              completedAt: nowTime,
+              outputSummary: `${conn.name} triggered (Mock)`,
+            },
+            false
+          );
+          patchAction(action.id, {
+            status: "executed",
+            responsePreview: mockPreview,
+            executedAt: `${conn.name} triggered ✓ at ${nowTime}`,
+          });
+          onSyncWorkflowNode?.({
+            toolName: action.toolName,
+            status: "done",
+            completedAt: nowTime,
+          });
+          appendLiveLog(conn.name, "success", `${conn.name} simulated ✓ (Mock Mode)`);
+          onToast(`${conn.name} Triggered ✓`, `Simulated ${conn.method} request in Mock Mode.`);
+          return true;
+        }
+
+        const resp = await fetch("/api/integrations/custom-tool", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            endpointUrl: conn.endpointUrl,
+            method: conn.method,
+            authHeaderName: conn.authHeaderName,
+            authHeaderValue: conn.authHeaderValue,
+            extraHeadersJson: conn.extraHeadersJson,
+            payloadTemplate: conn.payloadTemplate,
+            args: action.args,
+            meetingContext: {
+              meetingId: meeting.id,
+              meetingTitle: meeting.title,
+              date: meeting.date,
+              summary: meeting.summary,
+              items: meeting.extractedItems,
+            },
+          }),
+        });
+        const data = (await resp.json().catch(() => ({}))) as {
+          ok?: boolean;
+          status?: number;
+          responsePreview?: string;
+          error?: string;
+        };
+        if (!resp.ok || !data.ok) {
+          throw new Error(
+            data.error || `${conn.name} returned HTTP ${data.status || resp.status}.`
+          );
+        }
+
+        onRecordIdempotency(
+          {
+            key: action.idempotencyKey,
+            nodeId: action.id,
+            meetingId: meeting.id,
+            completedAt: nowTime,
+            outputSummary: `${conn.name} HTTP ${data.status || 200}`,
+          },
+          false
+        );
+        patchAction(action.id, {
+          status: "executed",
+          responsePreview: data.responsePreview || `HTTP ${data.status || 200} OK`,
+          executedAt: `${conn.name} triggered ✓ at ${nowTime}`,
+        });
+        onSyncWorkflowNode?.({
+          toolName: action.toolName,
+          status: "done",
+          completedAt: nowTime,
+        });
+        appendLiveLog(
+          conn.name,
+          "success",
+          `${conn.name} (${conn.method}) → HTTP ${data.status || 200} ✓`
+        );
+        onToast(`${conn.name} Executed ✓`, `HTTP ${data.status || 200} from ${conn.endpointUrl}`);
+        return true;
+      }
+
       // call_n8n
       const webhook = settings.n8nWebhookUrl.trim();
       const payload = {
@@ -994,6 +1109,16 @@ export function ToolExecutionPanel({
               Test mode: {settings.testMode ? "ON" : "OFF"}
             </button>
 
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              title="Add or manage n8n-style Custom Connectors (Notion, Jira, WhatsApp, CRM, APIs)"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-cyan-400/30 bg-cyan-500/10 px-3 py-1.5 font-mono text-[11px] font-medium text-cyan-200 whitespace-nowrap shrink-0 transition-colors hover:bg-cyan-500/20"
+            >
+              <PlugZap className="h-3.5 w-3.5 text-cyan-300" />
+              Connectors ({activeConnectorsCount})
+            </button>
+
             <div className="glass-inset rounded-xl px-3 py-1.5 font-mono text-[11px] text-slate-200 tabular-nums">
               Duplicates blocked:{" "}
               <span className="font-semibold text-[#5eead4]">{duplicatesBlockedTotal}</span>
@@ -1203,7 +1328,7 @@ export function ToolExecutionPanel({
                       <div className="flex flex-wrap items-center gap-2 font-mono text-[11px]">
                         <span className={`inline-flex items-center gap-1.5 font-semibold ${meta.color}`}>
                           <Icon className="h-3.5 w-3.5" />
-                          {meta.label}
+                          {action.customConnectorName || meta.label}
                         </span>
                         <span className="text-slate-500">·</span>
                         <span
@@ -1236,6 +1361,11 @@ export function ToolExecutionPanel({
                         {action.title}
                       </h4>
                       <p className="mt-1 text-xs text-slate-300/80">{action.description}</p>
+                      {action.responsePreview && (
+                        <pre className="mt-2 max-h-24 overflow-auto rounded-lg border border-cyan-400/25 bg-[#071318]/80 px-2.5 py-1.5 font-mono text-[10px] whitespace-pre-wrap text-cyan-100/90">
+                          {action.responsePreview}
+                        </pre>
+                      )}
                     </div>
 
                     {/* Permission Buttons: [Permit] [Edit] [Skip] */}

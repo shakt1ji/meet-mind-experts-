@@ -38,7 +38,11 @@ import type {
 } from "../types/meetmind";
 import { getAudioBlob } from "../utils/audioStore";
 import type { GoogleAuthSession } from "../utils/googleAuth";
-import { buildPlannedActionsFromFunctionCalls, formatMmSs } from "../utils/liveProcessor";
+import {
+  buildMockCustomConnectorActions,
+  buildPlannedActionsFromFunctionCalls,
+  formatMmSs,
+} from "../utils/liveProcessor";
 import { buildMockPlannedToolActions } from "../data/mockGeminiResponses";
 import { ToolExecutionPanel } from "./ToolExecutionPanel";
 import { Transcript } from "./Transcript";
@@ -345,10 +349,14 @@ export function LiveRecordView({
 
   const handlePlanTools = async (targetMeeting: Meeting): Promise<PlannedToolAction[]> => {
     setIsPlanningTools(true);
+    const customConnectors = settings.customConnectors || [];
     try {
       if (mockMode) {
         await new Promise((r) => window.setTimeout(r, 220));
-        return buildMockPlannedToolActions(targetMeeting.id, targetMeeting.title);
+        return [
+          ...buildMockPlannedToolActions(targetMeeting.id, targetMeeting.title),
+          ...buildMockCustomConnectorActions(targetMeeting, customConnectors),
+        ];
       }
 
       const resp = await fetch("/api/gemini/plan-tools", {
@@ -361,6 +369,7 @@ export function LiveRecordView({
           executionPlan: targetMeeting.executionPlan || [],
           roster: people,
           modelName: settings.geminiModel,
+          customConnectors,
           items: targetMeeting.extractedItems.map((it) => ({
             kind: it.kind,
             liveCategory: it.liveCategory,
@@ -383,7 +392,11 @@ export function LiveRecordView({
         throw new Error(data.error || "Could not plan tool actions.");
       }
 
-      return buildPlannedActionsFromFunctionCalls(targetMeeting.id, data.toolCalls);
+      return buildPlannedActionsFromFunctionCalls(
+        targetMeeting.id,
+        data.toolCalls,
+        customConnectors
+      );
     } catch (err) {
       onToast(
         "Tool Planner Notice",
@@ -391,7 +404,10 @@ export function LiveRecordView({
           ? `${err.message} Using editable fallback tool actions.`
           : "Using editable fallback tool actions."
       );
-      return buildMockPlannedToolActions(targetMeeting.id, targetMeeting.title);
+      return [
+        ...buildMockPlannedToolActions(targetMeeting.id, targetMeeting.title),
+        ...buildMockCustomConnectorActions(targetMeeting, customConnectors),
+      ];
     } finally {
       setIsPlanningTools(false);
     }

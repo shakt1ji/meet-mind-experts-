@@ -1,4 +1,5 @@
 import type {
+  CustomConnector,
   ExecutionPlanStep,
   ExecutionToolBadge,
   ExtractedItem,
@@ -343,7 +344,8 @@ export function buildAutoTicketsAndPromisesFromMeeting(
 
 export function buildPlannedActionsFromFunctionCalls(
   meetingId: string,
-  toolCalls: Array<{ id?: string; name: string; args: Record<string, unknown> }>
+  toolCalls: Array<{ id?: string; name: string; args: Record<string, unknown> }>,
+  customConnectors: CustomConnector[] = []
 ): PlannedToolAction[] {
   const validToolNames = new Set<PlannedToolName>([
     "create_ticket",
@@ -356,10 +358,36 @@ export function buildPlannedActionsFromFunctionCalls(
   ]);
 
   return toolCalls.map((fc, idx) => {
+    const args = fc.args || {};
+
+    if (!validToolNames.has(fc.name as PlannedToolName)) {
+      const matchedConn = customConnectors.find(
+        (c) => c.toolName.toLowerCase() === (fc.name || "").toLowerCase()
+      );
+      if (matchedConn) {
+        const previewVal = Object.values(args)[0] ? String(Object.values(args)[0]) : "";
+        return {
+          id: fc.id || `act_${meetingId}_custom_${idx}`,
+          toolName: "custom_connector",
+          customConnectorId: matchedConn.id,
+          customConnectorName: matchedConn.name,
+          customToolName: matchedConn.toolName,
+          title: `${matchedConn.name}: ${previewVal ? previewVal.slice(0, 60) : matchedConn.toolName}`,
+          description: `Calls ${matchedConn.method} ${matchedConn.endpointUrl} (${matchedConn.toolName}) with AI-extracted fields.`,
+          args,
+          status: "pending",
+          idempotencyKey: computeIdempotencyKey(
+            meetingId,
+            `custom_${matchedConn.toolName}_${idx}`,
+            args
+          ),
+        };
+      }
+    }
+
     const toolName = (
       validToolNames.has(fc.name as PlannedToolName) ? fc.name : "create_ticket"
     ) as PlannedToolName;
-    const args = fc.args || {};
 
     let title = `Execute ${toolName}`;
     let description = "Prepared by Gemini function calling — awaiting your approval.";
@@ -399,6 +427,52 @@ export function buildPlannedActionsFromFunctionCalls(
       idempotencyKey: computeIdempotencyKey(meetingId, `${toolName}_${idx}`, args),
     };
   });
+}
+
+export function buildMockCustomConnectorActions(
+  meeting: Meeting,
+  customConnectors: CustomConnector[]
+): PlannedToolAction[] {
+  const firstItem = meeting.extractedItems[0];
+  return customConnectors
+    .filter((c) => c.enabled && c.endpointUrl.trim().length > 0)
+    .map((conn, idx) => {
+      const args: Record<string, unknown> = {};
+      for (const param of conn.params) {
+        if (!param.name.trim()) continue;
+        if (param.type === "number") args[param.name] = 1;
+        else if (param.type === "boolean") args[param.name] = true;
+        else if (param.name.toLowerCase().includes("title") || param.name.toLowerCase().includes("summary")) {
+          args[param.name] = firstItem?.title || meeting.title;
+        } else if (param.name.toLowerCase().includes("due") || param.name.toLowerCase().includes("date")) {
+          args[param.name] = firstItem?.dueDate || meeting.date;
+        } else if (param.name.toLowerCase().includes("owner") || param.name.toLowerCase().includes("assignee")) {
+          args[param.name] = firstItem?.rawOwner || "Team";
+        } else {
+          args[param.name] = meeting.summary || meeting.title;
+        }
+      }
+      if (Object.keys(args).length === 0) {
+        args.summary = meeting.summary || meeting.title;
+      }
+
+      return {
+        id: `act_${meeting.id}_custom_mock_${idx}`,
+        toolName: "custom_connector" as PlannedToolName,
+        customConnectorId: conn.id,
+        customConnectorName: conn.name,
+        customToolName: conn.toolName,
+        title: `${conn.name}: ${firstItem?.title || meeting.title}`,
+        description: `Calls ${conn.method} ${conn.endpointUrl} (${conn.toolName}) with extracted meeting data.`,
+        args,
+        status: "pending",
+        idempotencyKey: computeIdempotencyKey(
+          meeting.id,
+          `custom_mock_${conn.toolName}_${idx}`,
+          args
+        ),
+      };
+    });
 }
 
 export function buildWorkflowFromExecutionPlan(

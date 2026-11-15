@@ -23,6 +23,7 @@ import {
   DEFAULT_GEMINI_MODEL,
   validateSupabaseInputs,
 } from "../utils/settingsStorage";
+import { CustomConnectorsSection } from "./CustomConnectorsSection";
 
 interface SettingsViewProps {
   settings: AppSettings;
@@ -462,6 +463,19 @@ export function SettingsView({
           </button>
         </div>
       </form>
+
+      {/* Custom n8n-Style Tool Connectors */}
+      <CustomConnectorsSection
+        connectors={draft.customConnectors}
+        onChangeConnectors={(next) => {
+          const updated: AppSettings = {
+            ...draft,
+            customConnectors: next,
+          };
+          setDraft(updated);
+          void onSaveSettings(updated);
+        }}
+      />
     </div>
   );
 }
