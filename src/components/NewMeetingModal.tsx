@@ -221,18 +221,18 @@ export function NewMeetingModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#040c10]/75 p-4 backdrop-blur-md"
       role="dialog"
       aria-modal="true"
       aria-labelledby="new-meeting-title"
     >
-      <div className="w-full max-w-2xl rounded-xl border border-white/[0.12] bg-[#111118] shadow-2xl">
-        <div className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
+      <div className="glass-card-elevated w-full max-w-2xl overflow-hidden rounded-2xl">
+        <div className="flex items-center justify-between border-b border-white/[0.1] px-6 py-4">
           <div>
-            <h2 id="new-meeting-title" className="font-serif text-xl italic text-zinc-100">
+            <h2 id="new-meeting-title" className="font-serif text-xl italic text-slate-50">
               Analyze Meeting Input
             </h2>
-            <p className="mt-0.5 text-xs text-zinc-400">
+            <p className="mt-0.5 text-xs text-slate-300/80">
               Paste a bilingual transcript or upload meeting audio for single-pass transcription & extraction.
             </p>
           </div>
@@ -240,13 +240,13 @@ export function NewMeetingModal({
             type="button"
             onClick={onClose}
             aria-label="Close modal"
-            className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-100"
+            className="rounded-xl p-1.5 text-slate-300 hover:bg-white/[0.08] hover:text-white"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <form onSubmit={handleAnalyzeSubmit} className="space-y-4 p-5">
+        <form onSubmit={handleAnalyzeSubmit} className="space-y-4 p-6">
           {/* Mode Switcher */}
           <div className="flex items-center gap-2">
             <button
@@ -255,10 +255,10 @@ export function NewMeetingModal({
                 setMode("paste");
                 setError(null);
               }}
-              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+              className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-medium transition-all ${
                 mode === "paste"
-                  ? "bg-[#a78bfa] text-[#0b0b10]"
-                  : "border border-white/[0.08] bg-white/[0.03] text-zinc-300 hover:bg-white/[0.07]"
+                  ? "btn-glazed-primary"
+                  : "border border-white/[0.1] bg-white/[0.04] text-slate-200 hover:bg-white/[0.09]"
               }`}
             >
               <FileText className="h-3.5 w-3.5" />
@@ -270,10 +270,10 @@ export function NewMeetingModal({
                 setMode("audio");
                 setError(null);
               }}
-              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+              className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-medium transition-all ${
                 mode === "audio"
-                  ? "bg-[#a78bfa] text-[#0b0b10]"
-                  : "border border-white/[0.08] bg-white/[0.03] text-zinc-300 hover:bg-white/[0.07]"
+                  ? "btn-glazed-primary"
+                  : "border border-white/[0.1] bg-white/[0.04] text-slate-200 hover:bg-white/[0.09]"
               }`}
             >
               <FileAudio className="h-3.5 w-3.5" />
@@ -285,7 +285,7 @@ export function NewMeetingModal({
             <div className="sm:col-span-2">
               <label
                 htmlFor="meeting-title-input"
-                className="block font-mono text-[11px] text-zinc-400"
+                className="block font-mono text-[11px] text-slate-300"
               >
                 Meeting Title
               </label>
@@ -295,14 +295,14 @@ export function NewMeetingModal({
                 required
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="mt-1.5 w-full rounded-lg border border-white/[0.1] bg-[#0b0b10] px-3 py-2 text-sm text-zinc-100 focus:border-[#a78bfa] focus:outline-none"
+                className="glass-inset mt-1.5 w-full rounded-xl px-3 py-2 text-sm text-slate-100 focus:border-[#5eead4] focus:outline-none"
               />
             </div>
 
             <div>
               <label
                 htmlFor="meeting-date-input"
-                className="block font-mono text-[11px] text-zinc-400"
+                className="block font-mono text-[11px] text-slate-300"
               >
                 Meeting Date
               </label>
@@ -313,7 +313,7 @@ export function NewMeetingModal({
                 value={meetingDate}
                 onChange={(e) => setMeetingDate(e.target.value)}
                 placeholder="14 Nov 2026"
-                className="mt-1.5 w-full rounded-lg border border-white/[0.1] bg-[#0b0b10] px-3 py-2 font-mono text-xs text-zinc-100 focus:border-[#a78bfa] focus:outline-none"
+                className="glass-inset mt-1.5 w-full rounded-xl px-3 py-2 font-mono text-xs text-slate-100 focus:border-[#5eead4] focus:outline-none"
               />
             </div>
           </div>
@@ -322,7 +322,7 @@ export function NewMeetingModal({
             <div>
               <label
                 htmlFor="transcript-textarea"
-                className="block font-mono text-[11px] text-zinc-400"
+                className="block font-mono text-[11px] text-slate-300"
               >
                 Transcript Lines (MM:SS Speaker: line)
               </label>
@@ -332,11 +332,11 @@ export function NewMeetingModal({
                 required
                 value={rawTranscript}
                 onChange={(e) => setRawTranscript(e.target.value)}
-                className="mt-1.5 w-full rounded-lg border border-white/[0.1] bg-[#0b0b10] p-3 font-mono text-xs leading-relaxed text-zinc-200 focus:border-[#a78bfa] focus:outline-none"
+                className="glass-inset mt-1.5 w-full rounded-xl p-3 font-mono text-xs leading-relaxed text-slate-100 focus:border-[#5eead4] focus:outline-none"
               />
             </div>
           ) : (
-            <div className="rounded-xl border border-dashed border-white/[0.18] bg-[#0b0b10]/80 p-6 text-center">
+            <div className="glass-inset rounded-2xl border-dashed border-white/[0.2] p-6 text-center">
               <input
                 ref={fileInputRef}
                 type="file"
@@ -348,13 +348,13 @@ export function NewMeetingModal({
                 }}
                 className="hidden"
               />
-              <Upload className="mx-auto h-6 w-6 text-[#a78bfa]" />
-              <div className="mt-2.5 text-sm font-medium text-zinc-200">
+              <Upload className="mx-auto h-6 w-6 text-[#5eead4]" />
+              <div className="mt-2.5 text-sm font-medium text-slate-100">
                 {selectedAudioFile
                   ? selectedAudioFile.name
                   : "Select an audio recording (.mp3, .wav, .webm, .m4a)"}
               </div>
-              <p className="mt-1 text-xs text-zinc-500">
+              <p className="mt-1 text-xs text-slate-400">
                 {selectedAudioFile
                   ? `${(selectedAudioFile.size / (1024 * 1024)).toFixed(2)} MB · Ready for single-pass Gemini transcription`
                   : "Multimodal Gemini transcription extracts English & Hinglish speaker turns."}
@@ -363,14 +363,14 @@ export function NewMeetingModal({
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="rounded-lg border border-[#a78bfa]/40 bg-[#a78bfa]/15 px-3.5 py-1.5 text-xs font-medium text-[#e9d5ff] hover:bg-[#a78bfa]/25"
+                  className="btn-glazed-soft rounded-xl px-3.5 py-1.5 text-xs font-medium"
                 >
                   {selectedAudioFile ? "Choose different file" : "Browse audio file"}
                 </button>
                 <button
                   type="button"
                   onClick={() => setMode("paste")}
-                  className="text-xs text-zinc-400 underline underline-offset-4 hover:text-zinc-200"
+                  className="text-xs text-slate-300 underline underline-offset-4 hover:text-white"
                 >
                   Use paste fallback
                 </button>
@@ -379,46 +379,46 @@ export function NewMeetingModal({
           )}
 
           {/* Consent Banner */}
-          <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-white/[0.1] bg-[#0b0b10] px-3.5 py-3 text-xs text-zinc-300">
+          <label className="glass-inset flex cursor-pointer items-start gap-3 rounded-xl px-3.5 py-3 text-xs text-slate-200">
             <input
               type="checkbox"
               checked={consentAccepted}
               onChange={(e) => onToggleConsent(e.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded border-white/20 bg-[#111118] accent-[#a78bfa]"
+              className="mt-0.5 h-4 w-4 rounded border-white/25 bg-[#071318] accent-[#5eead4]"
             />
             <span className="flex flex-1 items-center gap-2">
-              <ShieldCheck className="h-4 w-4 shrink-0 text-[#a78bfa]" />
+              <ShieldCheck className="h-4 w-4 shrink-0 text-[#5eead4]" />
               <span>
                 Audio is processed once and not stored.{" "}
-                <span className="text-zinc-500">(Required before analyzing)</span>
+                <span className="text-slate-400">(Required before analyzing)</span>
               </span>
             </span>
           </label>
 
           {statusMessage && (
-            <div className="rounded-lg border border-[#a78bfa]/30 bg-[#a78bfa]/10 px-3 py-2 font-mono text-xs text-[#e9d5ff]">
+            <div className="rounded-xl border border-[#5eead4]/35 bg-[#5eead4]/12 px-3 py-2 font-mono text-xs text-[#ccfbf1]">
               {statusMessage}
             </div>
           )}
 
           {error && (
-            <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
+            <div className="rounded-xl border border-rose-400/35 bg-rose-500/14 px-3 py-2 text-xs text-rose-100">
               {error}
             </div>
           )}
 
-          <div className="flex items-center justify-end gap-3 border-t border-white/[0.08] pt-4">
+          <div className="flex items-center justify-end gap-3 border-t border-white/[0.1] pt-4">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-white/[0.1] px-4 py-2 text-xs font-medium text-zinc-300 hover:bg-white/[0.05]"
+              className="rounded-xl border border-white/[0.12] px-4 py-2 text-xs font-medium text-slate-200 hover:bg-white/[0.08]"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSubmitting || !consentAccepted}
-              className="inline-flex items-center gap-2 rounded-lg bg-[#a78bfa] px-4 py-2 text-xs font-semibold text-[#0b0b10] transition-colors hover:bg-[#c4b5fd] disabled:cursor-not-allowed disabled:opacity-45"
+              className="btn-glazed-primary inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-45"
             >
               <Sparkles className="h-3.5 w-3.5" />
               {isSubmitting ? "Analyzing..." : "Analyze"}

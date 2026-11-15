@@ -1,5 +1,15 @@
 export type ExtractedKind = "Complaint" | "Decision" | "Commit" | "Action";
 export type RawExtractedType = "decision" | "action" | "complaint" | "commit";
+export type LiveExtractedCategory =
+  | "Complaint"
+  | "Task"
+  | "Decision"
+  | "Commit"
+  | "Deadline"
+  | "Meeting Request"
+  | "Presentation Request";
+
+export type MeetingStatus = "analyzing" | "ready" | "failed";
 
 export type ResolutionStatus =
   | "confirmed"
@@ -47,6 +57,7 @@ export interface Segment {
   speakerId: string;
   speakerName: string;
   text: string;
+  endTimestamp?: string;
 }
 
 export interface RawExtractedItem {
@@ -58,6 +69,8 @@ export interface RawExtractedItem {
   rawOwner: string;
   rawDue: string;
   confidence: number;
+  priority?: TicketPriority;
+  liveCategory?: LiveExtractedCategory;
 }
 
 export interface ExtractedItem {
@@ -78,19 +91,89 @@ export interface ExtractedItem {
   needsConfirmation: boolean;
   ambiguityReason?: string;
   resolved?: boolean;
+  priority?: TicketPriority;
+  liveCategory?: LiveExtractedCategory;
 }
 
-export interface Meeting {
+export type ExecutionToolBadge =
+  | "Ticket"
+  | "Gmail"
+  | "Calendar"
+  | "Slides"
+  | "Slack"
+  | "n8n";
+
+export interface ExecutionPlanStep {
   id: string;
+  stepNumber: number;
   title: string;
-  date: string;
-  duration: string;
-  durationSeconds: number;
-  speakerIds: string[];
-  segments: Segment[];
-  extractedItems: ExtractedItem[];
-  summary: string;
-  lastRunId?: string;
+  owner: string;
+  description: string;
+  tool: ExecutionToolBadge;
+  dependsOn: string[];
+  status: "planned" | "waiting" | "done" | "skipped" | "failed";
+}
+
+export type PlannedToolName =
+  | "create_ticket"
+  | "draft_email"
+  | "send_email"
+  | "create_calendar_event"
+  | "notify_slack"
+  | "call_n8n"
+  | "create_presentation";
+
+export type PlannedToolStatus =
+  | "pending"
+  | "drafted"
+  | "executed"
+  | "skipped"
+  | "failed";
+
+export interface GeneratedSlide {
+  title: string;
+  subtitle?: string;
+  layout: "title" | "agenda" | "bullets" | "actions" | "closing";
+  bullets: string[];
+  speakerNotes: string;
+}
+
+export interface SlideDeckData {
+  deckTitle: string;
+  subtitle: string;
+  generatedAt: string;
+  slides: GeneratedSlide[];
+}
+
+export interface LiveLogEntry {
+  id: string;
+  time: string;
+  tool: string;
+  status: "info" | "running" | "success" | "error" | "skipped";
+  message: string;
+}
+
+export interface PlannedToolAction {
+  id: string;
+  toolName: PlannedToolName;
+  title: string;
+  description: string;
+  args: Record<string, unknown>;
+  status: PlannedToolStatus;
+  idempotencyKey: string;
+  gmailDraftId?: string;
+  gmailDraftUrl?: string;
+  sentAt?: string;
+  calendarEventUrl?: string;
+  ticketKey?: string;
+  googlePresentationId?: string;
+  googlePresentationUrl?: string;
+  pptxFileName?: string;
+  slideDeck?: SlideDeckData;
+  attachPptx?: boolean;
+  attachmentName?: string;
+  error?: string;
+  executedAt?: string;
 }
 
 export interface NodeConfig {
@@ -123,6 +206,7 @@ export interface NodeConfig {
   // Slack nudge
   channel?: string;
   message?: string;
+  webhookUrl?: string;
 }
 
 export interface Node {
@@ -134,6 +218,8 @@ export interface Node {
   y: number;
   enabled: boolean;
   status: NodeExecutionStatus;
+  completedAt?: string;
+  errorMessage?: string;
   configSummary: string;
   config: NodeConfig;
 }
@@ -153,28 +239,79 @@ export interface Workflow {
   edges: WorkflowEdge[];
 }
 
-export type RunStepStatus = "completed" | "running" | "waiting" | "skipped";
+export interface Meeting {
+  id: string;
+  title: string;
+  date: string;
+  duration: string;
+  durationSeconds: number;
+  speakerIds: string[];
+  segments: Segment[];
+  extractedItems: ExtractedItem[];
+  summary: string;
+  lastRunId?: string;
+  language?: string;
+  createdAt?: string;
+  isLiveRecording?: boolean;
+  status?: MeetingStatus;
+  audioPath?: string;
+  healthScore?: number;
+  analysisError?: string;
+  executionPlan?: ExecutionPlanStep[];
+  plannedActions?: PlannedToolAction[];
+  workflowSnapshot?: Workflow;
+  slideDeck?: SlideDeckData;
+  liveLog?: LiveLogEntry[];
+}
+
+export type RunStepStatus =
+  | "idle"
+  | "queued"
+  | "running"
+  | "completed"
+  | "waiting"
+  | "failed"
+  | "skipped";
 
 export interface RunStep {
   id: string;
+  stepIndex: number;
   nodeId: string;
+  nodeType: WorkflowNodeType;
   nodeLabel: string;
+  idempotencyKey: string;
   status: RunStepStatus;
   startedAt: string;
   durationMs: number;
   outputSummary: string;
+  error?: string;
+  skippedDuplicate?: boolean;
+  approverName?: string;
+  actionUrl?: string;
+  actionLabel?: string;
+  waitingKind?: "approval" | "gmail" | "wait";
 }
 
 export interface Run {
   id: string;
+  runNumber: number;
   meetingId: string;
   meetingTitle: string;
   workflowId: string;
-  status: "completed" | "needs_review" | "running";
+  status: "completed" | "needs_review" | "running" | "failed";
   startedAt: string;
   completedAt?: string;
   recapDraft?: string;
+  duplicatesBlockedInRun: number;
   steps: RunStep[];
+}
+
+export interface IdempotencyRecord {
+  key: string;
+  nodeId: string;
+  meetingId: string;
+  completedAt: string;
+  outputSummary: string;
 }
 
 export interface Ticket {
@@ -189,6 +326,7 @@ export interface Ticket {
   meetingId: string;
   segmentId: string;
   sourceKind: ExtractedKind;
+  sourceItemId?: string;
 }
 
 export interface Promise {
@@ -201,9 +339,29 @@ export interface Promise {
   confidence: number; // 0 to 1
   meetingId: string;
   segmentId: string;
+  sourceItemId?: string;
 }
 
-export type SidebarView = "meetings" | "workflow" | "tickets" | "promises";
+export type SidebarView =
+  | "meetings"
+  | "live"
+  | "history"
+  | "workflow"
+  | "tickets"
+  | "promises"
+  | "check"
+  | "settings";
+
+export interface AppSettings {
+  supabaseUrl: string;
+  supabaseAnonKey: string;
+  googleClientId: string;
+  slackWebhookUrl: string;
+  n8nWebhookUrl: string;
+  geminiModel: string;
+  testMode: boolean;
+  testEmail: string;
+}
 
 export interface MeetMindState {
   people: Person[];
@@ -211,6 +369,10 @@ export interface MeetMindState {
   selectedMeetingId: string;
   workflow: Workflow;
   runs: Run[];
+  idempotencyLedger: Record<string, IdempotencyRecord>;
+  duplicatesBlockedTotal: number;
+  nextRunNumber: number;
+  nextTicketNumber: number;
   tickets: Ticket[];
   promises: Promise[];
 }

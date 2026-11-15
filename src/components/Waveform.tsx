@@ -66,13 +66,13 @@ export function Waveform({
   const activePerson = people.find((p) => p.id === activeSegment?.speakerId);
 
   return (
-    <div className="rounded-xl border border-white/[0.08] bg-[#111118]/90 px-4 py-3.5">
+    <div className="glass-card rounded-2xl px-5 py-4">
       <div className="flex items-center gap-4">
         <button
           type="button"
           onClick={onTogglePlay}
           aria-label={isPlaying ? "Pause playback" : "Play recording"}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#a78bfa]/35 bg-[#a78bfa]/15 text-[#c4b5fd] transition-colors duration-150 hover:bg-[#a78bfa]/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a78bfa]"
+          className="btn-glazed-soft flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5eead4]"
         >
           {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 translate-x-[1px]" />}
         </button>
@@ -110,8 +110,8 @@ export function Waveform({
                   <span
                     className={`block w-full rounded-full transition-colors duration-150 ${
                       isPlayed
-                        ? "bg-[#a78bfa]"
-                        : "bg-white/[0.14] group-hover:bg-white/[0.28]"
+                        ? "bg-[#5eead4]"
+                        : "bg-white/[0.16] group-hover:bg-white/[0.32]"
                     }`}
                     style={{ height: `${finalPct}%` }}
                   />
@@ -122,12 +122,16 @@ export function Waveform({
         </div>
 
         <div className="hidden shrink-0 text-right sm:block">
-          <div className="font-mono text-xs text-zinc-200 tabular-nums">
-            {formatTime(currentSeconds)} <span className="text-zinc-500">/ {formatTime(durationSeconds)}</span>
+          <div className="font-mono text-xs text-slate-100 tabular-nums">
+            {formatTime(currentSeconds)}{" "}
+            <span className="text-slate-400">/ {formatTime(durationSeconds)}</span>
           </div>
           {activeSegment && (
-            <div className="mt-0.5 font-mono text-[11px] text-zinc-400">
-              Lane: <span className="text-[#c4b5fd]">{activePerson?.name || activeSegment.speakerName}</span>
+            <div className="mt-0.5 font-mono text-[11px] text-slate-400">
+              Lane:{" "}
+              <span className="text-[#5eead4]">
+                {activePerson?.name || activeSegment.speakerName}
+              </span>
             </div>
           )}
         </div>
